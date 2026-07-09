@@ -1,0 +1,1538 @@
+openapi: 3.0.3
+info:
+  title: Qwerty Learner API
+  description: |
+    前后端分离二次开发接口规范。
+    对齐前端类型：`src/typings/*`、`src/utils/db/record.ts`。
+    章节长度 CHAPTER_LENGTH = 20；时间戳为 Unix 秒（UTC）。
+  version: 1.0.0
+  contact:
+    name: Qwerty Learner
+
+servers:
+  - url: /api/v1
+    description: Relative to API host
+
+tags:
+  - name: Auth
+  - name: Dictionaries
+  - name: Records
+  - name: Reviews
+  - name: ErrorBook
+  - name: Stats
+  - name: Settings
+  - name: Data
+  - name: Pronunciation
+
+paths:
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: 注册
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: 登录
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: 刷新 Token
+      operationId: refreshToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: 当前用户
+      operationId: getMe
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: 登出
+      operationId: logout
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: No Content
+
+  /dictionaries:
+    get:
+      tags: [Dictionaries]
+      summary: 词典列表
+      operationId: listDictionaries
+      parameters:
+        - $ref: '#/components/parameters/languageCategory'
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: tag
+          in: query
+          schema:
+            type: string
+        - name: q
+          in: query
+          schema:
+            type: string
+          description: 名称/描述模糊搜索
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DictionaryListResponse'
+    post:
+      tags: [Dictionaries]
+      summary: 创建词典（管理员）
+      operationId: createDictionary
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DictionaryCreate'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dictionary'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /dictionaries/{dictId}:
+    get:
+      tags: [Dictionaries]
+      summary: 词典详情
+      operationId: getDictionary
+      parameters:
+        - $ref: '#/components/parameters/dictId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dictionary'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Dictionaries]
+      summary: 更新词典（管理员）
+      operationId: updateDictionary
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/dictId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DictionaryCreate'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dictionary'
+    delete:
+      tags: [Dictionaries]
+      summary: 删除词典（管理员）
+      operationId: deleteDictionary
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/dictId'
+      responses:
+        '204':
+          description: No Content
+
+  /dictionaries/{dictId}/words:
+    get:
+      tags: [Dictionaries]
+      summary: 按章/分页获取单词
+      operationId: getDictionaryWords
+      parameters:
+        - $ref: '#/components/parameters/dictId'
+        - name: chapter
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+          description: 章节号（每章 20 词）；与 offset/limit 二选一优先
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 20
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WordListResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /dictionaries/{dictId}/words/{wordName}:
+    get:
+      tags: [Dictionaries]
+      summary: 按词名查询
+      operationId: getDictionaryWord
+      parameters:
+        - $ref: '#/components/parameters/dictId'
+        - name: wordName
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WordWithIndex'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /dictionaries/{dictId}/words:bulk:
+    post:
+      tags: [Dictionaries]
+      summary: 批量写入单词（管理员）
+      operationId: bulkUpsertWords
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/dictId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WordBulkRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  written:
+                    type: integer
+                  length:
+                    type: integer
+                  chapterCount:
+                    type: integer
+
+  /dictionaries/{dictId}/error-words:
+    get:
+      tags: [ErrorBook]
+      summary: 某词典错题聚合
+      operationId: getDictErrorWords
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/dictId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ErrorWordData'
+
+  /records/words:
+    post:
+      tags: [Records]
+      summary: 提交单词练习记录
+      operationId: createWordRecord
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WordRecordCreate'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WordRecord'
+    get:
+      tags: [Records]
+      summary: 查询单词记录
+      operationId: listWordRecords
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: dict
+          in: query
+          schema:
+            type: string
+        - name: chapter
+          in: query
+          schema:
+            type: integer
+            nullable: true
+        - name: word
+          in: query
+          schema:
+            type: string
+        - name: wrongOnly
+          in: query
+          schema:
+            type: boolean
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - $ref: '#/components/parameters/sort'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WordRecordListResponse'
+    delete:
+      tags: [Records]
+      summary: 删除某词在某词典下的全部记录
+      operationId: deleteWordRecords
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: word
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: dict
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deletedCount:
+                    type: integer
+
+  /records/words:batch:
+    post:
+      tags: [Records]
+      summary: 批量提交单词记录（离线同步）
+      operationId: batchCreateWordRecords
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/WordRecordCreate'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ids:
+                    type: array
+                    items:
+                      type: integer
+                  accepted:
+                    type: integer
+                  rejected:
+                    type: integer
+
+  /records/chapters:
+    post:
+      tags: [Records]
+      summary: 提交章节练习记录
+      operationId: createChapterRecord
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChapterRecordCreate'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChapterRecord'
+    get:
+      tags: [Records]
+      summary: 查询章节记录
+      operationId: listChapterRecords
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: dict
+          in: query
+          schema:
+            type: string
+        - name: chapter
+          in: query
+          schema:
+            type: integer
+            nullable: true
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChapterRecordListResponse'
+
+  /reviews:
+    get:
+      tags: [Reviews]
+      summary: 复习记录列表
+      operationId: listReviews
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: dict
+          in: query
+          schema:
+            type: string
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ReviewRecord'
+                  total:
+                    type: integer
+    post:
+      tags: [Reviews]
+      summary: 基于错题生成新复习
+      description: |
+        排序：errorCountScore*0.6 + latestErrorTimeScore*0.4，升序。
+        与 `src/utils/db/review-record.ts` 一致。
+      operationId: createReview
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewCreate'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewRecord'
+
+  /reviews/latest:
+    get:
+      tags: [Reviews]
+      summary: 最新未完成复习
+      operationId: getLatestReview
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: dict
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK（无未完成复习时 record 为 null）
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  record:
+                    allOf:
+                      - $ref: '#/components/schemas/ReviewRecord'
+                    nullable: true
+
+  /reviews/{reviewId}:
+    patch:
+      tags: [Reviews]
+      summary: 更新复习进度
+      operationId: updateReview
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: reviewId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewUpdate'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewRecord'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /error-book:
+    get:
+      tags: [ErrorBook]
+      summary: 全局错题本
+      operationId: listErrorBook
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: dict
+          in: query
+          schema:
+            type: string
+        - name: includeRecords
+          in: query
+          schema:
+            type: boolean
+            default: false
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - $ref: '#/components/parameters/sort'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ErrorWordData'
+                  total:
+                    type: integer
+
+  /stats/chapters:
+    get:
+      tags: [Stats]
+      summary: 章节统计
+      operationId: getChapterStats
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: dict
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: chapter
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChapterStats'
+
+  /stats/dictionaries/{dictId}:
+    get:
+      tags: [Stats]
+      summary: 词典练习进度
+      operationId: getDictStats
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/dictId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DictStats'
+
+  /stats/analysis:
+    get:
+      tags: [Stats]
+      summary: 分析页总览
+      operationId: getAnalysisStats
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisStats'
+
+  /stats/summary:
+    get:
+      tags: [Stats]
+      summary: 用户总览
+      operationId: getStatsSummary
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatsSummary'
+
+  /settings:
+    get:
+      tags: [Settings]
+      summary: 获取用户设置
+      operationId: getSettings
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSettings'
+    put:
+      tags: [Settings]
+      summary: 全量更新设置
+      operationId: putSettings
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserSettings'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSettings'
+    patch:
+      tags: [Settings]
+      summary: 部分更新设置
+      operationId: patchSettings
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserSettingsPatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSettings'
+
+  /data/export:
+    post:
+      tags: [Data]
+      summary: 导出用户数据（gzip JSON）
+      operationId: exportData
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                include:
+                  type: array
+                  items:
+                    type: string
+                    enum: [wordRecords, chapterRecords, reviewRecords, settings]
+      responses:
+        '200':
+          description: gzip 文件流
+          content:
+            application/gzip:
+              schema:
+                type: string
+                format: binary
+
+  /data/import:
+    post:
+      tags: [Data]
+      summary: 导入用户数据
+      operationId: importData
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: mode
+          in: query
+          schema:
+            type: string
+            enum: [replace, merge]
+            default: replace
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  wordCount:
+                    type: integer
+                  chapterCount:
+                    type: integer
+                  reviewCount:
+                    type: integer
+                  settingsUpdated:
+                    type: boolean
+
+  /pronunciation:
+    get:
+      tags: [Pronunciation]
+      summary: 发音音频代理（可选）
+      operationId: getPronunciation
+      parameters:
+        - name: word
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: type
+          in: query
+          schema:
+            $ref: '#/components/schemas/PronunciationType'
+            default: us
+      responses:
+        '200':
+          description: audio/mpeg
+          content:
+            audio/mpeg:
+              schema:
+                type: string
+                format: binary
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    dictId:
+      name: dictId
+      in: path
+      required: true
+      schema:
+        type: string
+        example: cet4
+    languageCategory:
+      name: languageCategory
+      in: query
+      schema:
+        $ref: '#/components/schemas/LanguageCategoryType'
+    from:
+      name: from
+      in: query
+      schema:
+        type: integer
+      description: Unix 秒起始
+    to:
+      name: to
+      in: query
+      schema:
+        type: integer
+      description: Unix 秒结束
+    page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    pageSize:
+      name: pageSize
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    sort:
+      name: sort
+      in: query
+      schema:
+        type: string
+        example: timeStamp:desc
+
+  responses:
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Not Found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: Conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+
+    PronunciationType:
+      type: string
+      enum: [us, uk, romaji, zh, ja, de, hapin, kk, id]
+
+    PhoneticType:
+      type: string
+      enum: [us, uk, romaji, zh, ja, de, hapin, kk, id]
+
+    LanguageType:
+      type: string
+      enum: [en, romaji, zh, ja, code, de, kk, hapin, id]
+
+    LanguageCategoryType:
+      type: string
+      enum: [en, ja, de, code, kk, id]
+
+    WordDictationType:
+      type: string
+      enum: [hideAll, hideVowel, hideConsonant, randomHide]
+
+    WordDictationOpenBy:
+      type: string
+      enum: [user, auto]
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        displayName:
+          type: string
+          nullable: true
+        createdAt:
+          type: integer
+
+    RegisterRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        displayName:
+          type: string
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    AuthResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        expiresIn:
+          type: integer
+
+    Word:
+      type: object
+      required: [name, trans]
+      properties:
+        name:
+          type: string
+        trans:
+          type: array
+          items:
+            type: string
+        usphone:
+          type: string
+          default: ''
+        ukphone:
+          type: string
+          default: ''
+        notation:
+          type: string
+          nullable: true
+
+    WordWithIndex:
+      allOf:
+        - $ref: '#/components/schemas/Word'
+        - type: object
+          properties:
+            index:
+              type: integer
+              description: 在整本词典中的全局下标
+
+    Dictionary:
+      type: object
+      required: [id, name, description, category, tags, length, chapterCount, language, languageCategory]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        length:
+          type: integer
+        chapterCount:
+          type: integer
+          description: ceil(length / 20)
+        language:
+          $ref: '#/components/schemas/LanguageType'
+        languageCategory:
+          $ref: '#/components/schemas/LanguageCategoryType'
+        defaultPronIndex:
+          type: integer
+          nullable: true
+
+    DictionaryCreate:
+      type: object
+      required: [id, name, description, category, tags, language, languageCategory]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        language:
+          $ref: '#/components/schemas/LanguageType'
+        languageCategory:
+          $ref: '#/components/schemas/LanguageCategoryType'
+        defaultPronIndex:
+          type: integer
+          nullable: true
+
+    DictionaryListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Dictionary'
+        total:
+          type: integer
+
+    WordListResponse:
+      type: object
+      properties:
+        dictId:
+          type: string
+        chapter:
+          type: integer
+          nullable: true
+        chapterCount:
+          type: integer
+        total:
+          type: integer
+        words:
+          type: array
+          items:
+            $ref: '#/components/schemas/WordWithIndex'
+
+    WordBulkRequest:
+      type: object
+      required: [mode, words]
+      properties:
+        mode:
+          type: string
+          enum: [replace, append]
+        words:
+          type: array
+          items:
+            $ref: '#/components/schemas/Word'
+
+    LetterMistakes:
+      type: object
+      additionalProperties:
+        type: array
+        items:
+          type: string
+      description: '字母下标(string) -> 错误按键列表'
+
+    WordRecordCreate:
+      type: object
+      required: [word, dict, timing, wrongCount, mistakes]
+      properties:
+        word:
+          type: string
+        dict:
+          type: string
+        chapter:
+          type: integer
+          nullable: true
+          description: 正常 ≥0；复习 -1；错题练习可为 null
+        timing:
+          type: array
+          items:
+            type: number
+          description: 相邻字母输入时间差（ms）
+        wrongCount:
+          type: integer
+          minimum: 0
+        mistakes:
+          $ref: '#/components/schemas/LetterMistakes'
+        timeStamp:
+          type: integer
+          description: 可选；不传则服务端生成
+
+    WordRecord:
+      allOf:
+        - $ref: '#/components/schemas/WordRecordCreate'
+        - type: object
+          required: [id, timeStamp]
+          properties:
+            id:
+              type: integer
+            totalTime:
+              type: number
+              description: sum(timing)
+
+    WordRecordListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/WordRecord'
+        total:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+
+    ChapterRecordCreate:
+      type: object
+      required: [dict, time, correctCount, wrongCount, wordCount, correctWordIndexes, wordNumber, wordRecordIds]
+      properties:
+        dict:
+          type: string
+        chapter:
+          type: integer
+          nullable: true
+        time:
+          type: integer
+          description: 章节用时（秒）
+        correctCount:
+          type: integer
+        wrongCount:
+          type: integer
+        wordCount:
+          type: integer
+        correctWordIndexes:
+          type: array
+          items:
+            type: integer
+        wordNumber:
+          type: integer
+        wordRecordIds:
+          type: array
+          items:
+            type: integer
+        timeStamp:
+          type: integer
+
+    ChapterRecord:
+      allOf:
+        - $ref: '#/components/schemas/ChapterRecordCreate'
+        - type: object
+          required: [id, timeStamp]
+          properties:
+            id:
+              type: integer
+            wpm:
+              type: integer
+            wordAccuracy:
+              type: integer
+
+    ChapterRecordListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChapterRecord'
+        total:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+
+    ReviewRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+        dict:
+          type: string
+        index:
+          type: integer
+        createTime:
+          type: integer
+        isFinished:
+          type: boolean
+        words:
+          type: array
+          items:
+            $ref: '#/components/schemas/Word'
+
+    ReviewCreate:
+      type: object
+      required: [dict]
+      properties:
+        dict:
+          type: string
+        errorData:
+          type: array
+          description: 可选；不传则服务端自行聚合错题
+          items:
+            type: object
+            required: [word, errorCount, latestErrorTime, originData]
+            properties:
+              word:
+                type: string
+              errorCount:
+                type: integer
+              latestErrorTime:
+                type: integer
+              originData:
+                $ref: '#/components/schemas/Word'
+
+    ReviewUpdate:
+      type: object
+      properties:
+        index:
+          type: integer
+        isFinished:
+          type: boolean
+        words:
+          type: array
+          nullable: true
+          items:
+            $ref: '#/components/schemas/Word'
+
+    ErrorWordData:
+      type: object
+      properties:
+        word:
+          type: string
+        dict:
+          type: string
+        wrongCount:
+          type: integer
+        errorCount:
+          type: integer
+          description: 与 wrongCount 同义（兼容 TErrorWordData）
+        latestErrorTime:
+          type: integer
+        errorLetters:
+          type: object
+          additionalProperties:
+            type: integer
+        errorChar:
+          type: array
+          items:
+            type: string
+        originData:
+          $ref: '#/components/schemas/Word'
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/WordRecord'
+
+    ChapterStats:
+      type: object
+      properties:
+        dict:
+          type: string
+        chapter:
+          type: integer
+        exerciseCount:
+          type: integer
+        avgWrongWordCount:
+          type: number
+        avgWrongInputCount:
+          type: number
+
+    DictStats:
+      type: object
+      properties:
+        dict:
+          type: string
+        exercisedChapterCount:
+          type: integer
+        chapterCount:
+          type: integer
+
+    ActivityDay:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        count:
+          type: integer
+        level:
+          type: integer
+          minimum: 0
+          maximum: 4
+
+    AnalysisStats:
+      type: object
+      properties:
+        isEmpty:
+          type: boolean
+        exerciseRecord:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActivityDay'
+        wordRecord:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActivityDay'
+        wpmRecord:
+          type: array
+          items:
+            type: array
+            minItems: 2
+            maxItems: 2
+            items: {}
+          description: '[date, wpm][]'
+        accuracyRecord:
+          type: array
+          items:
+            type: array
+            minItems: 2
+            maxItems: 2
+            items: {}
+        wrongTimeRecord:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              value:
+                type: integer
+
+    StatsSummary:
+      type: object
+      properties:
+        wordRecordCount:
+          type: integer
+        chapterRecordCount:
+          type: integer
+        totalTimeSeconds:
+          type: integer
+        firstPracticeAt:
+          type: integer
+          nullable: true
+
+    SoundResource:
+      type: object
+      properties:
+        key:
+          type: string
+        name:
+          type: string
+        filename:
+          type: string
+
+    UserSettings:
+      type: object
+      properties:
+        currentDict:
+          type: string
+        currentChapter:
+          type: integer
+        loopWordConfig:
+          type: object
+          properties:
+            times:
+              type: number
+        keySoundsConfig:
+          type: object
+          properties:
+            isOpen:
+              type: boolean
+            isOpenClickSound:
+              type: boolean
+            volume:
+              type: number
+            resource:
+              $ref: '#/components/schemas/SoundResource'
+        hintSoundsConfig:
+          type: object
+          additionalProperties: true
+        pronunciation:
+          type: object
+          properties:
+            isOpen:
+              type: boolean
+            volume:
+              type: number
+            type:
+              $ref: '#/components/schemas/PronunciationType'
+            name:
+              type: string
+            isLoop:
+              type: boolean
+            isTransRead:
+              type: boolean
+            transVolume:
+              type: number
+            rate:
+              type: number
+        fontsize:
+          type: object
+          properties:
+            foreignFont:
+              type: number
+            translateFont:
+              type: number
+        randomConfig:
+          type: object
+          properties:
+            isOpen:
+              type: boolean
+        phoneticConfig:
+          type: object
+          properties:
+            isOpen:
+              type: boolean
+            type:
+              $ref: '#/components/schemas/PhoneticType'
+        wordDictationConfig:
+          type: object
+          properties:
+            isOpen:
+              type: boolean
+            type:
+              $ref: '#/components/schemas/WordDictationType'
+            openBy:
+              $ref: '#/components/schemas/WordDictationOpenBy'
+        isShowPrevAndNextWord:
+          type: boolean
+        isIgnoreCase:
+          type: boolean
+        isShowAnswerOnHover:
+          type: boolean
+        isTextSelectable:
+          type: boolean
+        isOpenDarkMode:
+          type: boolean
+        dismissStartCardDate:
+          type: string
+          format: date-time
+          nullable: true
+        hasSeenEnhancedPromotion:
+          type: boolean
+
+    UserSettingsPatch:
+      type: object
+      additionalProperties: true
+      description: 任意 UserSettings 子集，对象字段深合并
