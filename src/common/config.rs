@@ -74,15 +74,15 @@ impl Config {
             xinference_base_url: env::var("XINFERENCE_BASE_URL")
                 .unwrap_or_else(|_| "http://127.0.0.1:9997".to_string()),
             xinference_image_model: env::var("XINFERENCE_IMAGE_MODEL")
-                .unwrap_or_else(|_| "flux2-klein-4B".to_string()),
+                .unwrap_or_else(|_| "z-image-turbo".to_string()),
             xinference_image_size: env::var("XINFERENCE_IMAGE_SIZE")
                 .unwrap_or_else(|_| "512x512".to_string()),
             xinference_image_steps: env::var("XINFERENCE_IMAGE_STEPS")
-                .map(|s| s.parse::<u32>().unwrap_or(20))
-                .unwrap_or(20),
+                .map(|s| s.parse::<u32>().unwrap_or(8))
+                .unwrap_or(8),
             xinference_image_guidance_scale: env::var("XINFERENCE_IMAGE_GUIDANCE_SCALE")
-                .map(|s| s.parse::<f32>().unwrap_or(1.0))
-                .unwrap_or(1.0),
+                .map(|s| s.parse::<f32>().unwrap_or(0.0))
+                .unwrap_or(0.0),
             xinference_request_timeout_secs: env::var("XINFERENCE_REQUEST_TIMEOUT_SECS")
                 .map(|s| s.parse::<u64>().unwrap_or(900))
                 .unwrap_or(900),

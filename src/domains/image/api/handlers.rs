@@ -16,7 +16,7 @@ use crate::{
     path = "/image/word",
     request_body = GenerateWordImageRequest,
     responses(
-        (status = 200, description = "Generated 1024x1024 WebP image", content_type = "image/webp")
+        (status = 200, description = "Generated image", content_type = "image/*")
     ),
     tag = "Images"
 )]
@@ -28,6 +28,11 @@ pub async fn generate_word_image(
         .image_service
         .generate_word_image(payload.word)
         .await?;
+    let (image_width, image_height) = state
+        .config
+        .xinference_image_size
+        .split_once('x')
+        .unwrap_or(("512", "512"));
 
     let response = Response::builder()
         .status(StatusCode::OK)
@@ -37,8 +42,8 @@ pub async fn generate_word_image(
             format!("inline; filename=\"{}\"", image.file_name),
         )
         .header(header::CACHE_CONTROL, "no-store")
-        .header("X-Image-Width", "1024")
-        .header("X-Image-Height", "1024")
+        .header("X-Image-Width", image_width)
+        .header("X-Image-Height", image_height)
         .header("X-Image-Display-Width", "320")
         .header("X-Image-Display-Height", "320")
         .body(Body::from(image.bytes))
