@@ -1,45 +1,114 @@
-use crate::{
-    common::{
-        app_state::AppState,
-        dto::RestApiResponse,
-        error::AppError,
-        jwt::{AuthBody, AuthPayload},
-    },
-    domains::auth::dto::auth_dto::AuthUserDto,
+use axum::{
+    extract::{Extension, State},
+    http::StatusCode,
+    response::IntoResponse,
+    Json,
 };
-use axum::extract::State;
-use axum::{response::IntoResponse, Json};
+use validator::Validate;
 
-/// this function creates a router for creating user authentication registration
-/// it will create a new user in the database
+use crate::{
+    common::{app_state::AppState, error::AppError, jwt::Claims},
+    domains::auth::dto::auth_dto::{LoginRequest, RefreshTokenRequest, RegisterRequest},
+};
+
 #[utoipa::path(
     post,
     path = "/auth/register",
-    request_body = AuthUserDto,
-    responses((status = 200, description = "Create user authentication", body = AuthUserDto)),
-    tag = "UserAuth"
+    request_body = RegisterRequest,
+    responses(
+        (status = 201, description = "Created", body = crate::domains::auth::dto::auth_dto::AuthResponse),
+        (status = 409, description = "Conflict", body = crate::common::error::ErrorResponse)
+    ),
+    tag = "Auth"
 )]
-pub async fn create_user_auth(
+pub async fn register(
     State(state): State<AppState>,
-    Json(payload): Json<AuthUserDto>,
+    Json(payload): Json<RegisterRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    state.auth_service.create_user_auth(payload).await?;
-    Ok(RestApiResponse::success(()))
+    payload
+        .validate()
+        .map_err(|err| AppError::ValidationError(err.to_string()))?;
+
+    let auth_response = state.auth_service.register(payload).await?;
+    Ok((StatusCode::CREATED, Json(auth_response)))
 }
 
-/// this function creates a router for login user
-/// it will return a JWT token if the user is authenticated
 #[utoipa::path(
     post,
     path = "/auth/login",
-    request_body = AuthPayload,
-    responses((status = 200, description = "Login user", body = AuthBody)),
-    tag = "UserAuth"
+    request_body = LoginRequest,
+    responses(
+        (status = 200, description = "OK", body = crate::domains::auth::dto::auth_dto::AuthResponse),
+        (status = 401, description = "Unauthorized", body = crate::common::error::ErrorResponse)
+    ),
+    tag = "Auth"
 )]
-pub async fn login_user(
+pub async fn login(
     State(state): State<AppState>,
-    Json(payload): Json<AuthPayload>,
+    Json(payload): Json<LoginRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    let auth_body = state.auth_service.login_user(payload).await?;
-    Ok(RestApiResponse::success(auth_body))
+    payload
+        .validate()
+        .map_err(|err| AppError::ValidationError(err.to_string()))?;
+
+    let auth_response = state.auth_service.login(payload).await?;
+    Ok(Json(auth_response))
+}
+
+#[utoipa::path(
+    post,
+    path = "/auth/refresh",
+    request_body = RefreshTokenRequest,
+    responses(
+        (status = 200, description = "OK", body = crate::domains::auth::dto::auth_dto::AuthResponse),
+        (status = 401, description = "Unauthorized", body = crate::common::error::ErrorResponse)
+    ),
+    tag = "Auth"
+)]
+pub async fn refresh(
+    State(state): State<AppState>,
+    Json(payload): Json<RefreshTokenRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    payload
+        .validate()
+        .map_err(|err| AppError::ValidationError(err.to_string()))?;
+
+    let auth_response = state.auth_service.refresh(payload).await?;
+    Ok(Json(auth_response))
+}
+
+#[utoipa::path(
+    get,
+    path = "/auth/me",
+    responses(
+        (status = 200, description = "OK", body = crate::domains::auth::dto::auth_dto::AuthUserDto),
+        (status = 401, description = "Unauthorized", body = crate::common::error::ErrorResponse)
+    ),
+    security(("bearer_auth" = [])),
+    tag = "Auth"
+)]
+pub async fn me(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+) -> Result<impl IntoResponse, AppError> {
+    let user = state.auth_service.me(claims.sub).await?;
+    Ok(Json(user))
+}
+
+#[utoipa::path(
+    post,
+    path = "/auth/logout",
+    responses(
+        (status = 204, description = "No Content"),
+        (status = 401, description = "Unauthorized", body = crate::common::error::ErrorResponse)
+    ),
+    security(("bearer_auth" = [])),
+    tag = "Auth"
+)]
+pub async fn logout(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+) -> Result<impl IntoResponse, AppError> {
+    state.auth_service.logout(claims.sub).await?;
+    Ok(StatusCode::NO_CONTENT)
 }

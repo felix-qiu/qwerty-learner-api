@@ -1,7 +1,7 @@
 use super::handlers::*;
 use crate::{
     common::app_state::AppState,
-    domains::user::dto::user_dto::{CreateUserMultipartDto, SearchUserDto, UpdateUserDto, UserDto},
+    domains::user::dto::user_dto::{CreateUserDto, SearchUserDto, UpdateUserDto, UserDto},
 };
 
 use axum::{
@@ -24,7 +24,7 @@ use utoipa::{
         update_user,
         delete_user,
     ),
-    components(schemas(UserDto, SearchUserDto, CreateUserMultipartDto, UpdateUserDto)),
+    components(schemas(UserDto, SearchUserDto, CreateUserDto, UpdateUserDto)),
     tags(
         (name = "Users", description = "User management endpoints")
     ),
@@ -45,7 +45,7 @@ impl utoipa::Modify for UserApiDoc {
                 HttpBuilder::new()
                     .scheme(HttpAuthScheme::Bearer)
                     .bearer_format("JWT")
-                    .description(Some("Input your `<your‑jwt>`"))
+                    .description(Some("Input your access token"))
                     .build(),
             ),
         )

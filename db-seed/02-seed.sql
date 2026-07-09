@@ -1,26 +1,37 @@
 -- Seed data for users
-INSERT INTO users (id, username, email, created_by, created_at, modified_by, modified_at) VALUES
-  ('00000000-0000-0000-0000-000000000001', 'user01', 'user01@example.com', NULL, NOW(), NULL, NOW()),
-  ('00000000-0000-0000-0000-000000000002', 'user02', 'user02@example.com', NULL, NOW(), NULL, NOW()),
-  ('00000000-0000-0000-0000-000000000003', 'user03', 'user03@example.com', NULL, NOW(), NULL, NOW()),
-  ('00000000-0000-0000-0000-000000000004', 'user04', 'user04@example.com', NULL, NOW(), NULL, NOW()),
-  ('00000000-0000-0000-0000-000000000005', 'user05', 'user05@example.com', NULL, NOW(), NULL, NOW()),
-  ('00000000-0000-0000-0000-000000000006', 'user06', 'user06@example.com', NULL, NOW(), NULL, NOW()),
-  ('00000000-0000-0000-0000-000000000007', 'user07', 'user07@example.com', NULL, NOW(), NULL, NOW()),
-  ('00000000-0000-0000-0000-000000000008', 'user08', 'user08@example.com', NULL, NOW(), NULL, NOW()),
-  ('00000000-0000-0000-0000-000000000009', 'user09', 'user09@example.com', NULL, NOW(), NULL, NOW()),
-  ('00000000-0000-0000-0000-000000000010', 'user10', 'user10@example.com', NULL, NOW(), NULL, NOW()),
-  ('00000000-0000-0000-0000-000000000011', 'user11', 'user11@example.com', NULL, NOW(), NULL, NOW()),
-  ('00000000-0000-0000-0000-000000000012', 'user12', 'user12@example.com', NULL, NOW(), NULL, NOW()),
-  ('00000000-0000-0000-0000-000000000013', 'user13', 'user13@example.com', NULL, NOW(), NULL, NOW()),
-  ('00000000-0000-0000-0000-000000000014', 'user14', 'user14@example.com', NULL, NOW(), NULL, NOW()),
-  ('00000000-0000-0000-0000-000000000015', 'user15', 'user15@example.com', NULL, NOW(), NULL, NOW()),
-  ('00000000-0000-0000-0000-000000000016', 'user16', 'user16@example.com', NULL, NOW(), NULL, NOW()),
-  ('00000000-0000-0000-0000-000000000017', 'user17', 'user17@example.com', NULL, NOW(), NULL, NOW()),
-  ('00000000-0000-0000-0000-000000000018', 'user18', 'user18@example.com', NULL, NOW(), NULL, NOW()),
-  ('00000000-0000-0000-0000-000000000019', 'user19', 'user19@example.com', NULL, NOW(), NULL, NOW()),
-  ('00000000-0000-0000-0000-000000000020', 'user20', 'user20@example.com', NULL, NOW(), NULL, NOW()),
-  ('00000000-0000-0000-0000-000000000021', 'apitest01', 'apitest01@example.com', NULL, NOW(), NULL, NOW());
+WITH seed_users(id, email, display_name) AS (
+  VALUES
+    ('00000000-0000-0000-0000-000000000001', 'user01@example.com', 'user01'),
+    ('00000000-0000-0000-0000-000000000002', 'user02@example.com', 'user02'),
+    ('00000000-0000-0000-0000-000000000003', 'user03@example.com', 'user03'),
+    ('00000000-0000-0000-0000-000000000004', 'user04@example.com', 'user04'),
+    ('00000000-0000-0000-0000-000000000005', 'user05@example.com', 'user05'),
+    ('00000000-0000-0000-0000-000000000006', 'user06@example.com', 'user06'),
+    ('00000000-0000-0000-0000-000000000007', 'user07@example.com', 'user07'),
+    ('00000000-0000-0000-0000-000000000008', 'user08@example.com', 'user08'),
+    ('00000000-0000-0000-0000-000000000009', 'user09@example.com', 'user09'),
+    ('00000000-0000-0000-0000-000000000010', 'user10@example.com', 'user10'),
+    ('00000000-0000-0000-0000-000000000011', 'user11@example.com', 'user11'),
+    ('00000000-0000-0000-0000-000000000012', 'user12@example.com', 'user12'),
+    ('00000000-0000-0000-0000-000000000013', 'user13@example.com', 'user13'),
+    ('00000000-0000-0000-0000-000000000014', 'user14@example.com', 'user14'),
+    ('00000000-0000-0000-0000-000000000015', 'user15@example.com', 'user15'),
+    ('00000000-0000-0000-0000-000000000016', 'user16@example.com', 'user16'),
+    ('00000000-0000-0000-0000-000000000017', 'user17@example.com', 'user17'),
+    ('00000000-0000-0000-0000-000000000018', 'user18@example.com', 'user18'),
+    ('00000000-0000-0000-0000-000000000019', 'user19@example.com', 'user19'),
+    ('00000000-0000-0000-0000-000000000020', 'user20@example.com', 'user20'),
+    ('00000000-0000-0000-0000-000000000021', 'apitest01@example.com', 'apitest01')
+)
+INSERT INTO users (id, email, password_hash, display_name, created_at, updated_at)
+SELECT
+  id,
+  email,
+  '$argon2id$v=19$m=19456,t=2,p=1$XBFwBY52C9SpzkxON1OTLg$djDqZQvzxFKc9HOCWyZfKy+RlFTs0BJFSkcw/Tos14c',
+  display_name,
+  NOW(),
+  NOW()
+FROM seed_users;
 
 -- Seed data for devices
 INSERT INTO devices (id, user_id, name, status, device_os, registered_at, created_by, created_at, modified_by, modified_at) VALUES
@@ -127,13 +138,6 @@ INSERT INTO devices (id, user_id, name, status, device_os, registered_at, create
   ('00000000-0000-0000-0000-000000000080', '00000000-0000-0000-0000-000000000020', 'device20-4', 'decommissioned', 'iOS', NOW(), NULL, NOW(), NULL, NOW());
 
 
--- Seed data for user_roles
-
 -- for auth login
--- client_id: apitest01
--- client_secret: test_password
-
--- password_hash value: test_password
-INSERT INTO user_auth
-(user_id, password_hash, created_at, modified_at)
-VALUES('00000000-0000-0000-0000-000000000021', '$argon2id$v=19$m=19456,t=2,p=1$XBFwBY52C9SpzkxON1OTLg$djDqZQvzxFKc9HOCWyZfKy+RlFTs0BJFSkcw/Tos14c', NOW(), NOW());
+-- email: apitest01@example.com
+-- password: test_password

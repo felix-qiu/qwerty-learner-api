@@ -1,74 +1,155 @@
 use axum::http::{Method, StatusCode};
 
-use clean_axum_demo::common::{
-    dto::RestApiResponse,
-    jwt::{AuthBody, AuthPayload},
+use clean_axum_demo::{
+    common::error::ErrorResponse,
+    domains::auth::dto::auth_dto::{
+        AuthResponse, AuthUserDto, LoginRequest, RefreshTokenRequest, RegisterRequest,
+    },
 };
-use test_helpers::{deserialize_json_body, request_with_body, TEST_CLIENT_ID, TEST_CLIENT_SECRET};
+use test_helpers::{
+    deserialize_json_body, request_with_bearer_token, request_with_body, TEST_AUTH_EMAIL,
+    TEST_AUTH_PASSWORD,
+};
 
 mod test_helpers;
 
 #[tokio::test]
+async fn test_register_user() {
+    let unique = uuid::Uuid::new_v4();
+    let payload = RegisterRequest {
+        email: format!("register-{unique}@example.com"),
+        password: "test_password".to_string(),
+        display_name: Some("Register User".to_string()),
+    };
+
+    let response = request_with_body(Method::POST, "/auth/register", &payload);
+    let (parts, body) = response.await.into_parts();
+
+    assert_eq!(parts.status, StatusCode::CREATED);
+
+    let auth_response: AuthResponse = deserialize_json_body(body).await.unwrap();
+    assert_eq!(auth_response.user.email, payload.email);
+    assert_eq!(auth_response.user.display_name, payload.display_name);
+    assert!(!auth_response.access_token.is_empty());
+    assert!(!auth_response.refresh_token.is_empty());
+    assert_eq!(auth_response.expires_in, 3600);
+}
+
+#[tokio::test]
+async fn test_register_duplicate_email() {
+    let payload = RegisterRequest {
+        email: TEST_AUTH_EMAIL.to_string(),
+        password: TEST_AUTH_PASSWORD.to_string(),
+        display_name: Some("Duplicate User".to_string()),
+    };
+
+    let response = request_with_body(Method::POST, "/auth/register", &payload);
+    let (parts, body) = response.await.into_parts();
+
+    assert_eq!(parts.status, StatusCode::CONFLICT);
+
+    let error: ErrorResponse = deserialize_json_body(body).await.unwrap();
+    assert_eq!(error.code, "CONFLICT");
+}
+
+#[tokio::test]
 async fn test_login_user() {
-    let payload = AuthPayload {
-        client_id: TEST_CLIENT_ID.to_string(),
-        client_secret: TEST_CLIENT_SECRET.to_string(),
+    let payload = LoginRequest {
+        email: TEST_AUTH_EMAIL.to_string(),
+        password: TEST_AUTH_PASSWORD.to_string(),
     };
 
     let response = request_with_body(Method::POST, "/auth/login", &payload);
-
     let (parts, body) = response.await.into_parts();
 
     assert_eq!(parts.status, StatusCode::OK);
 
-    let response_body: RestApiResponse<AuthBody> = deserialize_json_body(body).await.unwrap();
-
-    assert_eq!(response_body.0.status, StatusCode::OK);
-
-    let auth_body = response_body.0.data.unwrap();
-
-    assert_eq!(auth_body.token_type, "Bearer");
-    assert!(!auth_body.access_token.is_empty());
+    let auth_response: AuthResponse = deserialize_json_body(body).await.unwrap();
+    assert_eq!(auth_response.user.email, TEST_AUTH_EMAIL);
+    assert!(!auth_response.access_token.is_empty());
+    assert!(!auth_response.refresh_token.is_empty());
+    assert_eq!(auth_response.expires_in, 3600);
 }
 
 #[tokio::test]
 async fn test_login_user_fail() {
-    let payload = AuthPayload {
-        client_id: TEST_CLIENT_ID.to_string(),
-        client_secret: uuid::Uuid::new_v4().to_string(),
+    let payload = LoginRequest {
+        email: TEST_AUTH_EMAIL.to_string(),
+        password: uuid::Uuid::new_v4().to_string(),
     };
 
     let response = request_with_body(Method::POST, "/auth/login", &payload);
-
     let (parts, body) = response.await.into_parts();
 
     assert_eq!(parts.status, StatusCode::UNAUTHORIZED);
 
-    let response_body: RestApiResponse<()> = deserialize_json_body(body).await.unwrap();
-
-    assert_eq!(response_body.0.status, StatusCode::UNAUTHORIZED);
-    // println!("response_body.0.status: {:?}", response_body.0.status);
-    // println!("response_body.0.message: {:?}", response_body.0.message);
+    let error: ErrorResponse = deserialize_json_body(body).await.unwrap();
+    assert_eq!(error.code, "UNAUTHORIZED");
 }
 
 #[tokio::test]
-async fn test_login_user_not_found() {
-    let username = format!("testuser-{}", uuid::Uuid::new_v4()).to_string();
-
-    let payload = AuthPayload {
-        client_id: username,
-        client_secret: uuid::Uuid::new_v4().to_string(),
+async fn test_refresh_token() {
+    let login = register_unique_user().await;
+    let payload = RefreshTokenRequest {
+        refresh_token: login.refresh_token.clone(),
     };
 
-    let response = request_with_body(Method::POST, "/auth/login", &payload);
-
+    let response = request_with_body(Method::POST, "/auth/refresh", &payload);
     let (parts, body) = response.await.into_parts();
 
-    assert_eq!(parts.status, StatusCode::NOT_FOUND);
+    assert_eq!(parts.status, StatusCode::OK);
 
-    let response_body: RestApiResponse<()> = deserialize_json_body(body).await.unwrap();
+    let auth_response: AuthResponse = deserialize_json_body(body).await.unwrap();
+    assert_eq!(auth_response.user.email, login.user.email);
+    assert_ne!(auth_response.refresh_token, login.refresh_token);
+    assert!(!auth_response.access_token.is_empty());
+}
 
-    assert_eq!(response_body.0.status, StatusCode::NOT_FOUND);
-    println!("response_body.0.status: {:?}", response_body.0.status);
-    println!("response_body.0.message: {:?}", response_body.0.message);
+#[tokio::test]
+async fn test_get_me() {
+    let login = register_unique_user().await;
+
+    let response = request_with_bearer_token(Method::GET, "/auth/me", &login.access_token);
+    let (parts, body) = response.await.into_parts();
+
+    assert_eq!(parts.status, StatusCode::OK);
+
+    let user: AuthUserDto = deserialize_json_body(body).await.unwrap();
+    assert_eq!(user.email, login.user.email);
+}
+
+#[tokio::test]
+async fn test_logout_revokes_refresh_tokens() {
+    let login = register_unique_user().await;
+
+    let logout_response =
+        request_with_bearer_token(Method::POST, "/auth/logout", &login.access_token);
+    let (logout_parts, _) = logout_response.await.into_parts();
+    assert_eq!(logout_parts.status, StatusCode::NO_CONTENT);
+
+    let payload = RefreshTokenRequest {
+        refresh_token: login.refresh_token,
+    };
+    let refresh_response = request_with_body(Method::POST, "/auth/refresh", &payload);
+    let (refresh_parts, body) = refresh_response.await.into_parts();
+
+    assert_eq!(refresh_parts.status, StatusCode::UNAUTHORIZED);
+
+    let error: ErrorResponse = deserialize_json_body(body).await.unwrap();
+    assert_eq!(error.code, "UNAUTHORIZED");
+}
+
+async fn register_unique_user() -> AuthResponse {
+    let unique = uuid::Uuid::new_v4();
+    let payload = RegisterRequest {
+        email: format!("auth-{unique}@example.com"),
+        password: "test_password".to_string(),
+        display_name: Some("Auth Test User".to_string()),
+    };
+
+    let response = request_with_body(Method::POST, "/auth/register", &payload);
+    let (parts, body) = response.await.into_parts();
+    assert_eq!(parts.status, StatusCode::CREATED);
+
+    deserialize_json_body(body).await.unwrap()
 }

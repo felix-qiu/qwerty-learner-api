@@ -1,16 +1,14 @@
-//! This module defines the authentication service trait used to abstract
-//! user login and registration logic.
+//! Authentication service contract.
 
 use std::sync::Arc;
 
 use sqlx::PgPool;
 
 use crate::{
-    common::{
-        error::AppError,
-        jwt::{AuthBody, AuthPayload},
+    common::error::AppError,
+    domains::auth::dto::auth_dto::{
+        AuthResponse, AuthUserDto, LoginRequest, RefreshTokenRequest, RegisterRequest,
     },
-    domains::auth::dto::auth_dto::AuthUserDto,
 };
 
 #[async_trait::async_trait]
@@ -22,9 +20,13 @@ pub trait AuthServiceTrait: Send + Sync {
     where
         Self: Sized;
 
-    /// Registers a new user authentication entry.
-    async fn create_user_auth(&self, auth_user: AuthUserDto) -> Result<(), AppError>;
+    async fn register(&self, payload: RegisterRequest) -> Result<AuthResponse, AppError>;
 
-    /// Authenticates a user and returns a JWT token payload on success.
-    async fn login_user(&self, auth_payload: AuthPayload) -> Result<AuthBody, AppError>;
+    async fn login(&self, payload: LoginRequest) -> Result<AuthResponse, AppError>;
+
+    async fn refresh(&self, payload: RefreshTokenRequest) -> Result<AuthResponse, AppError>;
+
+    async fn me(&self, user_id: String) -> Result<AuthUserDto, AppError>;
+
+    async fn logout(&self, user_id: String) -> Result<(), AppError>;
 }

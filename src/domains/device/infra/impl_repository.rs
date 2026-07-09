@@ -71,21 +71,21 @@ impl DeviceRepository for DeviceRepo {
     ) -> Result<Device, sqlx::Error> {
         let id = Uuid::new_v4().to_string();
 
-        sqlx::query!(
+        sqlx::query(
             r#"
             INSERT INTO devices 
             (id, user_id, name, status, device_os, registered_at, created_by, created_at, modified_by, modified_at) 
             VALUES ($1, $2, $3, $4, $5, $6, $7, now(), $8, now())
             "#,
-            id.clone(),
-            device.user_id.clone(),
-            device.name.clone(),
-            device.status.to_string(),
-            device.device_os.to_string(),
-            device.registered_at,
-            device.modified_by.clone(),
-            device.modified_by
         )
+        .bind(id.clone())
+        .bind(device.user_id.clone())
+        .bind(device.name.clone())
+        .bind(device.status.to_string())
+        .bind(device.device_os.to_string())
+        .bind(device.registered_at)
+        .bind(device.modified_by.clone())
+        .bind(device.modified_by)
         .execute(&mut **tx)
         .await?;
 
@@ -103,7 +103,8 @@ impl DeviceRepository for DeviceRepo {
         id: String,
         device: UpdateDeviceDto,
     ) -> Result<Option<Device>, sqlx::Error> {
-        let existing = sqlx::query!(r#"SELECT id FROM devices WHERE id = $1"#, id)
+        let existing = sqlx::query(r#"SELECT id FROM devices WHERE id = $1"#)
+            .bind(&id)
             .fetch_optional(&mut **tx)
             .await?;
 
@@ -203,7 +204,8 @@ impl DeviceRepository for DeviceRepo {
         tx: &mut Transaction<'_, Postgres>,
         id: String,
     ) -> Result<bool, sqlx::Error> {
-        let res = sqlx::query!(r#"DELETE FROM devices WHERE id = $1"#, id)
+        let res = sqlx::query(r#"DELETE FROM devices WHERE id = $1"#)
+            .bind(id)
             .execute(&mut **tx)
             .await?;
 

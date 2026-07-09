@@ -138,10 +138,10 @@ docker-compose down --rmi all
    ```bash
    curl -X POST http://localhost:8080/auth/login \
      -H "Content-Type: application/json" \
-     -d '{"client_id":"apitest01","client_secret":"test_password"}'
+     -d '{"email":"apitest01@example.com","password":"test_password"}'
    ```
 
-2. Use the returned `token` to access protected endpoints:
+2. Use the returned `accessToken` to access protected endpoints:
 
    ```bash
    curl http://localhost:8080/user -H "Authorization: Bearer $token"
@@ -155,12 +155,12 @@ Open [http://localhost:8080/docs](http://localhost:8080/docs) in your browser fo
 
   ```json
   {
-    "client_id": "apitest01",
-    "client_secret": "test_password"
+    "email": "apitest01@example.com",
+    "password": "test_password"
   }
   ```
 
-- Copy the returned JWT token.
+- Copy the returned `accessToken`.
 - Click the 🔒 Authorize button in Swagger UI and paste the token to authorize requests.
 
 ---
@@ -254,20 +254,7 @@ The database structure is illustrated in the ERD:
 
 All endpoints return a consistent JSON envelope:
 
-```json
-{
-  "status": 200,
-  "message": "success",
-  "data": { ... }
-}
-```
 
-Implemented as:
-
-- `ApiResponse<T>` – generic response wrapper
-- `RestApiResponse<T>` – wrapper implementing Axum's `IntoResponse` trait
-
-See definitions in `common/dto.rs`.
 
 ---
 

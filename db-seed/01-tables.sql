@@ -1,22 +1,45 @@
 -- ===============================================
--- 01‐tables.sql  (compatible with MariaDB/MySQL & PostgreSQL)
+-- 01‐tables.sql
 -- ===============================================
+
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- ------------------------------------------------
+-- Common updated_at trigger helper
+-- ------------------------------------------------
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
 -- ------------------------------------------------
 -- 1) users table
 -- ------------------------------------------------
 CREATE TABLE users (
-    id           VARCHAR(36)    PRIMARY KEY,
-    username     VARCHAR(64)    NOT NULL UNIQUE,
-    email        VARCHAR(128)   NOT NULL,
-    created_by   VARCHAR(36),
-    created_at   TIMESTAMPTZ    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    modified_by  VARCHAR(36),
-    modified_at  TIMESTAMPTZ    NOT NULL DEFAULT CURRENT_TIMESTAMP
+    id               TEXT         PRIMARY KEY DEFAULT ('usr_' || gen_random_uuid()::text),
+    email            TEXT         NOT NULL,
+    email_normalized TEXT         GENERATED ALWAYS AS (lower(email)) STORED,
+    password_hash    TEXT         NOT NULL,
+    display_name     TEXT,
+    avatar_url       TEXT,
+    role             TEXT         NOT NULL DEFAULT 'user'
+                                     CHECK (role IN ('user', 'admin')),
+    status           TEXT         NOT NULL DEFAULT 'active'
+                                     CHECK (status IN ('active', 'disabled', 'deleted')),
+    last_login_at    TIMESTAMPTZ,
+    created_at       TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    updated_at       TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    CONSTRAINT uq_users_email_normalized UNIQUE (email_normalized)
 );
 
--- Separate index for email lookup
-CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_users_email_normalized ON users(email_normalized);
+
+CREATE TRIGGER trg_users_updated_at
+    BEFORE UPDATE ON users
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 
 -- ------------------------------------------------
@@ -73,15 +96,38 @@ CREATE TABLE uploaded_files (
 
 
 -- ------------------------------------------------
--- 4) user_auth table
+-- 4) refresh_tokens table
 -- ------------------------------------------------
-CREATE TABLE user_auth (
-    user_id       VARCHAR(36)  PRIMARY KEY,
-    password_hash VARCHAR(255) NOT NULL,
-    created_at    TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    modified_at   TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
+CREATE TABLE refresh_tokens (
+    id           BIGSERIAL PRIMARY KEY,
+    user_id      TEXT        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash   TEXT        NOT NULL,
+    user_agent   TEXT,
+    ip           INET,
+    expires_at   TIMESTAMPTZ NOT NULL,
+    revoked_at   TIMESTAMPTZ,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
 
-    -- FK to users.id
-    FOREIGN KEY (user_id) REFERENCES users(id)
+    CONSTRAINT uq_refresh_token_hash UNIQUE (token_hash)
 );
 
+CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);
+CREATE INDEX idx_refresh_tokens_active
+    ON refresh_tokens(user_id, expires_at)
+    WHERE revoked_at IS NULL;
+
+
+-- ------------------------------------------------
+-- 5) user_tokens table
+-- ------------------------------------------------
+CREATE TABLE user_tokens (
+    id           BIGSERIAL PRIMARY KEY,
+    user_id      TEXT        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    purpose      TEXT        NOT NULL CHECK (purpose IN ('email_verify', 'password_reset')),
+    token_hash   TEXT        NOT NULL UNIQUE,
+    expires_at   TIMESTAMPTZ NOT NULL,
+    used_at      TIMESTAMPTZ,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_user_tokens_user_purpose ON user_tokens(user_id, purpose);

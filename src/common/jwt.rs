@@ -4,18 +4,19 @@ use axum::{
     response::{IntoResponse, Response},
 };
 
-use chrono::{Duration, Utc};
+use chrono::{DateTime, Duration, Utc};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::sync::LazyLock;
 use std::{env, fmt::Display};
-use utoipa::ToSchema;
+use uuid::Uuid;
 
 use super::error::AppError;
 
-/// JWT_SECRET_KEY is the environment variable that holds the secret key for JWT encoding and decoding.
-/// It is loaded from the environment variables using the dotenv crate.
-/// The secret key is used to sign the JWT tokens and should be kept secret.
+pub const ACCESS_TOKEN_EXPIRES_IN_SECONDS: i64 = 3600;
+pub const REFRESH_TOKEN_EXPIRES_IN_SECONDS: i64 = 60 * 60 * 24 * 30;
+
 pub static KEYS: LazyLock<Keys> = LazyLock::new(|| {
     dotenvy::dotenv().ok();
 
@@ -23,13 +24,11 @@ pub static KEYS: LazyLock<Keys> = LazyLock::new(|| {
     Keys::new(secret.as_bytes())
 });
 
-/// Keys is a struct that holds the encoding and decoding keys for JWT.
 pub struct Keys {
     pub encoding: EncodingKey,
     pub decoding: DecodingKey,
 }
 
-/// The Keys struct is used to create the encoding and decoding keys for JWT.
 impl Keys {
     fn new(secret: &[u8]) -> Self {
         Self {
@@ -39,101 +38,106 @@ impl Keys {
     }
 }
 
-/// Claims is a struct that represents the claims in the JWT token.
-/// It contains the subject (user ID), expiration time, and issued at time.
-/// The `sub` field is the user ID, `exp` is the expiration time, and `iat` is the issued at time.
-/// The `Claims` struct is used to encode and decode the JWT tokens.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum TokenKind {
+    Access,
+    Refresh,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Claims {
     pub sub: String,
     pub exp: usize,
     pub iat: usize,
+    pub jti: String,
+    pub token_type: TokenKind,
 }
 
-/// The Claims struct implements the `Display` trait for easy printing.
-/// It formats the claims as a string, showing the user ID.
 impl Display for Claims {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "user_id: {}", self.sub)
     }
 }
 
-/// The Default trait is implemented for the Claims struct.
-/// It sets the default values for the claims.
-impl Default for Claims {
-    fn default() -> Self {
-        let now = Utc::now();
-        let expire: Duration = Duration::hours(24);
-        let exp: usize = (now + expire).timestamp() as usize;
-        let iat: usize = now.timestamp() as usize;
-        Claims {
-            sub: String::new(),
-            exp,
-            iat,
-        }
+pub fn make_access_token(user_id: &str) -> Result<String, AppError> {
+    let (token, _) = make_token(
+        user_id,
+        TokenKind::Access,
+        Duration::seconds(ACCESS_TOKEN_EXPIRES_IN_SECONDS),
+    )?;
+    Ok(token)
+}
+
+pub fn make_refresh_token(user_id: &str) -> Result<(String, DateTime<Utc>), AppError> {
+    make_token(
+        user_id,
+        TokenKind::Refresh,
+        Duration::seconds(REFRESH_TOKEN_EXPIRES_IN_SECONDS),
+    )
+}
+
+pub fn decode_refresh_token(token: &str) -> Result<Claims, AppError> {
+    let claims = decode_claims(token)?;
+    if claims.token_type != TokenKind::Refresh {
+        return Err(AppError::InvalidToken);
     }
+    Ok(claims)
 }
 
-/// AuthBody is a struct that represents the authentication body.
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
-pub struct AuthBody {
-    pub access_token: String,
-    pub token_type: String,
+pub fn token_hash(token: &str) -> String {
+    let digest = Sha256::digest(token.as_bytes());
+    hex::encode(digest)
 }
 
-/// The AuthBody struct is used to create a new instance of the authentication body.
-/// It takes an access token as a parameter and sets the token type to "Bearer".
-impl AuthBody {
-    pub fn new(access_token: String) -> Self {
-        Self {
-            access_token,
-            token_type: "Bearer".to_string(),
-        }
-    }
-}
-
-/// AuthPayload is a struct that represents the authentication payload.
-/// It contains the client ID and client secret.
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
-pub struct AuthPayload {
-    pub client_id: String,
-    pub client_secret: String,
-}
-
-/// make_jwt_token is a function that creates a JWT token.
-/// It takes a user ID as a parameter and returns a Result with the JWT token or an error.
-pub fn make_jwt_token(user_id: &str) -> Result<String, AppError> {
+fn make_token(
+    user_id: &str,
+    token_type: TokenKind,
+    lifetime: Duration,
+) -> Result<(String, DateTime<Utc>), AppError> {
+    let now = Utc::now();
+    let expires_at = now + lifetime;
     let claims = Claims {
         sub: user_id.to_string(),
-        ..Default::default()
+        exp: expires_at.timestamp() as usize,
+        iat: now.timestamp() as usize,
+        jti: Uuid::new_v4().to_string(),
+        token_type,
     };
-    encode(&Header::default(), &claims, &KEYS.encoding).map_err(|_| AppError::TokenCreation)
+
+    let token =
+        encode(&Header::default(), &claims, &KEYS.encoding).map_err(|_| AppError::TokenCreation)?;
+
+    Ok((token, expires_at))
 }
 
-/// Middleware to validate JWT tokens.
-/// If the token is valid, the request proceeds; otherwise, a 401 Unauthorized is returned.
+fn decode_claims(token: &str) -> Result<Claims, AppError> {
+    decode::<Claims>(token, &KEYS.decoding, &Validation::default())
+        .map(|token_data| token_data.claims)
+        .map_err(|err| {
+            tracing::error!("Error decoding token: {:?}", err);
+            AppError::InvalidToken
+        })
+}
+
 pub async fn jwt_auth<B>(mut req: Request<B>, next: Next) -> Result<Response, Response>
 where
     B: Send + Into<axum::body::Body>,
 {
-    // Try to extract and trim the token in one go.
     let token = req
         .headers()
         .get("Authorization")
         .and_then(|v| v.to_str().ok())
         .and_then(|header| header.strip_prefix("Bearer "))
-        .map(|t| t.trim())
+        .map(str::trim)
         .filter(|t| !t.is_empty())
         .ok_or_else(|| AppError::InvalidToken.into_response())?;
 
-    // Validate and decode the token.
-    let token_data =
-        decode::<Claims>(token, &KEYS.decoding, &Validation::default()).map_err(|err| {
-            tracing::error!("Error decoding token: {:?}", err);
-            AppError::InvalidToken.into_response()
-        })?;
+    let claims = decode_claims(token).map_err(|err| err.into_response())?;
+    if claims.token_type != TokenKind::Access {
+        return Err(AppError::InvalidToken.into_response());
+    }
 
-    // Insert the decoded claims into the request extensions.
-    req.extensions_mut().insert(token_data.claims);
+    req.extensions_mut().insert(claims);
     Ok(next.run(req.map(Into::into)).await)
 }

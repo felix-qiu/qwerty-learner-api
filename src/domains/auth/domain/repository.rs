@@ -1,27 +1,66 @@
-//! This module defines the `UserAuthRepository` trait, which provides an abstraction
-//! over database operations related to user authentication records.
+//! Repository contract for authentication data.
 
-use super::model::UserAuth;
+use super::model::{AuthUser, NewAuthUser, RefreshToken};
 
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Postgres, Transaction};
 
 #[async_trait]
-/// Trait representing the repository contract for user authentication data.
-/// Enables decoupling of business logic from direct database interaction.
 pub trait UserAuthRepository: Send + Sync {
-    /// Finds a user authentication record by the user's username.
-    /// Returns `Ok(Some(UserAuth))` if found, or `Ok(None)` if not found.
-    async fn find_by_user_name(
-        &self,
-        pool: PgPool,
-        user_name: String,
-    ) -> Result<Option<UserAuth>, sqlx::Error>;
-
-    /// Inserts a new user authentication record into the database using a transaction.
-    async fn create(
+    async fn create_user(
         &self,
         tx: &mut Transaction<'_, Postgres>,
-        user_auth: UserAuth,
+        user: NewAuthUser,
+    ) -> Result<AuthUser, sqlx::Error>;
+
+    async fn find_user_by_email(
+        &self,
+        pool: PgPool,
+        email: &str,
+    ) -> Result<Option<AuthUser>, sqlx::Error>;
+
+    async fn find_user_by_id(
+        &self,
+        pool: PgPool,
+        id: &str,
+    ) -> Result<Option<AuthUser>, sqlx::Error>;
+
+    async fn find_user_by_id_in_tx(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        id: &str,
+    ) -> Result<Option<AuthUser>, sqlx::Error>;
+
+    async fn update_last_login_at(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        user_id: &str,
+    ) -> Result<(), sqlx::Error>;
+
+    async fn create_refresh_token(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        user_id: &str,
+        token_hash: &str,
+        expires_at: DateTime<Utc>,
+    ) -> Result<(), sqlx::Error>;
+
+    async fn find_active_refresh_token(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        token_hash: &str,
+    ) -> Result<Option<RefreshToken>, sqlx::Error>;
+
+    async fn revoke_refresh_token(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        token_hash: &str,
+    ) -> Result<(), sqlx::Error>;
+
+    async fn revoke_user_refresh_tokens(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        user_id: &str,
     ) -> Result<(), sqlx::Error>;
 }

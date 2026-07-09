@@ -4,13 +4,22 @@ use axum::{
     BoxError,
 };
 
+use serde::{Deserialize, Serialize};
 use sqlx::Error as SqlxError;
 use thiserror::Error;
 use tracing::error;
+use utoipa::ToSchema;
 
 use crate::common::dto::RestApiResponse;
 
-use super::dto::ApiResponse;
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ErrorResponse {
+    pub code: String,
+    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub details: Option<serde_json::Value>,
+}
 
 /// AppError is an enum that represents various types of errors that can occur in the application.
 /// It implements the `std::error::Error` trait and the `axum::response::IntoResponse` trait.
@@ -27,6 +36,9 @@ pub enum AppError {
 
     #[error("Validation error: {0}")]
     ValidationError(String),
+
+    #[error("Conflict: {0}")]
+    Conflict(String),
 
     #[error("Forbidden Request")]
     Forbidden,
@@ -64,11 +76,12 @@ pub enum AppError {
 /// It maps the error to an appropriate HTTP status code and constructs a JSON response body.
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
-        let status = match self {
-            AppError::ValidationError(_) => StatusCode::BAD_REQUEST,
+        let status = match &self {
+            AppError::ValidationError(_) => StatusCode::UNPROCESSABLE_ENTITY,
             AppError::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::NotFound(_) => StatusCode::NOT_FOUND,
             AppError::InternalError => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::Conflict(_) => StatusCode::CONFLICT,
             AppError::Forbidden => StatusCode::FORBIDDEN,
             AppError::ExternalServiceError(_) => StatusCode::BAD_GATEWAY,
             AppError::InvalidFileData
@@ -81,10 +94,28 @@ impl IntoResponse for AppError {
             AppError::TokenCreation => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::UserNotFound => StatusCode::NOT_FOUND,
         };
-        let body = axum::Json(ApiResponse::<()> {
-            status: status.as_u16(),
+
+        let code = match &self {
+            AppError::ValidationError(_) => "VALIDATION_ERROR",
+            AppError::DatabaseError(_) | AppError::InternalError | AppError::TokenCreation => {
+                "INTERNAL_ERROR"
+            }
+            AppError::NotFound(_) | AppError::UserNotFound => "NOT_FOUND",
+            AppError::Conflict(_) => "CONFLICT",
+            AppError::Forbidden => "FORBIDDEN",
+            AppError::ExternalServiceError(_) => "EXTERNAL_SERVICE_ERROR",
+            AppError::InvalidFileData
+            | AppError::FileSizeExceeded
+            | AppError::InvalidFileName
+            | AppError::UnsupportedFileExtension
+            | AppError::MissingCredentials => "BAD_REQUEST",
+            AppError::WrongCredentials | AppError::InvalidToken => "UNAUTHORIZED",
+        };
+
+        let body = axum::Json(ErrorResponse {
+            code: code.to_string(),
             message: self.to_string(),
-            data: None,
+            details: None,
         });
 
         (status, body).into_response()
