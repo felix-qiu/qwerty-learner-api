@@ -71,7 +71,7 @@ impl AuthServiceTrait for AuthService {
                 },
             )
             .await
-            .map_err(AppError::DatabaseError)?;
+            .map_err(map_registration_error)?;
 
         let response = self.create_auth_response(&mut tx, user).await?;
         tx.commit().await?;
@@ -88,7 +88,7 @@ impl AuthServiceTrait for AuthService {
             .map_err(AppError::DatabaseError)?
             .ok_or(AppError::WrongCredentials)?;
 
-        ensure_active_user(&user)?;
+        ensure_login_user(&user)?;
 
         if !hash_util::verify_password(&user.password_hash, &payload.password) {
             return Err(AppError::WrongCredentials);
@@ -134,7 +134,7 @@ impl AuthServiceTrait for AuthService {
             .map_err(AppError::DatabaseError)?
             .ok_or(AppError::InvalidToken)?;
 
-        ensure_active_user(&user)?;
+        ensure_token_user(&user)?;
 
         let response = self.create_auth_response(&mut tx, user).await?;
         tx.commit().await?;
@@ -148,9 +148,9 @@ impl AuthServiceTrait for AuthService {
             .find_user_by_id(self.pool.clone(), &user_id)
             .await
             .map_err(AppError::DatabaseError)?
-            .ok_or(AppError::UserNotFound)?;
+            .ok_or(AppError::InvalidToken)?;
 
-        ensure_active_user(&user)?;
+        ensure_token_user(&user)?;
 
         Ok(AuthUserDto::from(user))
     }
@@ -210,9 +210,25 @@ fn normalize_email(email: &str) -> Result<String, AppError> {
     Ok(email)
 }
 
-fn ensure_active_user(user: &AuthUser) -> Result<(), AppError> {
+fn ensure_login_user(user: &AuthUser) -> Result<(), AppError> {
     if user.status == "active" {
         return Ok(());
     }
-    Err(AppError::Forbidden)
+    Err(AppError::WrongCredentials)
+}
+
+fn ensure_token_user(user: &AuthUser) -> Result<(), AppError> {
+    if user.status == "active" {
+        return Ok(());
+    }
+    Err(AppError::InvalidToken)
+}
+
+fn map_registration_error(error: sqlx::Error) -> AppError {
+    if let sqlx::Error::Database(database_error) = &error {
+        if database_error.is_unique_violation() {
+            return AppError::Conflict("Email already registered".into());
+        }
+    }
+    AppError::DatabaseError(error)
 }

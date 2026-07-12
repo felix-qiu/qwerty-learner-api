@@ -1,4 +1,5 @@
 use axum::{
+    extract::rejection::{JsonRejection, QueryRejection},
     http::StatusCode,
     response::{IntoResponse, Response},
     BoxError,
@@ -36,6 +37,9 @@ pub enum AppError {
 
     #[error("Validation error: {0}")]
     ValidationError(String),
+
+    #[error("Bad request: {0}")]
+    BadRequest(String),
 
     #[error("Conflict: {0}")]
     Conflict(String),
@@ -78,6 +82,7 @@ impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let status = match &self {
             AppError::ValidationError(_) => StatusCode::UNPROCESSABLE_ENTITY,
+            AppError::BadRequest(_) => StatusCode::BAD_REQUEST,
             AppError::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::NotFound(_) => StatusCode::NOT_FOUND,
             AppError::InternalError => StatusCode::INTERNAL_SERVER_ERROR,
@@ -97,6 +102,7 @@ impl IntoResponse for AppError {
 
         let code = match &self {
             AppError::ValidationError(_) => "VALIDATION_ERROR",
+            AppError::BadRequest(_) => "BAD_REQUEST",
             AppError::DatabaseError(_) | AppError::InternalError | AppError::TokenCreation => {
                 "INTERNAL_ERROR"
             }
@@ -119,6 +125,18 @@ impl IntoResponse for AppError {
         });
 
         (status, body).into_response()
+    }
+}
+
+impl From<JsonRejection> for AppError {
+    fn from(rejection: JsonRejection) -> Self {
+        Self::BadRequest(rejection.body_text())
+    }
+}
+
+impl From<QueryRejection> for AppError {
+    fn from(rejection: QueryRejection) -> Self {
+        Self::BadRequest(rejection.body_text())
     }
 }
 

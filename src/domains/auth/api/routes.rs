@@ -44,9 +44,10 @@ pub struct UserAuthApiDoc;
 
 impl utoipa::Modify for UserAuthApiDoc {
     fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        openapi.servers = Some(vec![utoipa::openapi::Server::new("/api/v1")]);
         let components = openapi.components.as_mut().unwrap();
         components.add_security_scheme(
-            "bearer_auth",
+            "bearerAuth",
             SecurityScheme::Http(
                 HttpBuilder::new()
                     .scheme(HttpAuthScheme::Bearer)

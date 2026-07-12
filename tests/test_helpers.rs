@@ -29,6 +29,10 @@ static INIT: Once = Once::new();
 pub const TEST_AUTH_EMAIL: &str = "apitest01@example.com";
 #[allow(dead_code)]
 pub const TEST_AUTH_PASSWORD: &str = "test_password";
+#[allow(dead_code)]
+pub const TEST_ADMIN_EMAIL: &str = "apitest-admin@example.com";
+#[allow(dead_code)]
+pub const TEST_ADMIN_PASSWORD: &str = "test_password";
 
 #[allow(dead_code)]
 pub const TEST_USER_ID: &str = "00000000-0000-0000-0000-000000000001";
@@ -63,9 +67,7 @@ pub async fn create_test_router() -> Router {
     let pool = setup_test_db().await.unwrap();
     let config = Config::from_env().unwrap();
     let state = build_app_state(pool, config.clone());
-    let app = create_router(state);
-
-    app
+    create_router(state)
 }
 
 /// Helper function gets the authentication token
@@ -78,10 +80,25 @@ async fn get_authentication_token() -> String {
         password: TEST_AUTH_PASSWORD.to_string(),
     };
 
-    let response = request_with_body(Method::POST, "/auth/login", &payload);
+    let response = request_with_body(Method::POST, "/api/v1/auth/login", &payload);
 
     let (parts, body) = response.await.into_parts();
 
+    assert_eq!(parts.status, StatusCode::OK);
+
+    let auth_body: AuthResponse = deserialize_json_body(body).await.unwrap();
+    format!("Bearer {}", auth_body.access_token)
+}
+
+#[allow(dead_code)]
+async fn get_admin_authentication_token() -> String {
+    let payload = LoginRequest {
+        email: TEST_ADMIN_EMAIL.to_string(),
+        password: TEST_ADMIN_PASSWORD.to_string(),
+    };
+
+    let response = request_with_body(Method::POST, "/api/v1/auth/login", &payload);
+    let (parts, body) = response.await.into_parts();
     assert_eq!(parts.status, StatusCode::OK);
 
     let auth_body: AuthResponse = deserialize_json_body(body).await.unwrap();
@@ -171,6 +188,29 @@ pub async fn request_with_auth_and_body<T: serde::Serialize>(
 ) -> Response<Body> {
     let json_payload = serde_json::to_string(payload).expect("Failed to serialize payload");
     let token = get_authentication_token().await;
+    let request = get_request_with_auth_and_body(method, uri, &token, &json_payload);
+    let app = create_test_router().await;
+
+    app.oneshot(request.await).await.unwrap()
+}
+
+#[allow(dead_code)]
+pub async fn request_with_admin_auth(method: Method, uri: &str) -> Response<Body> {
+    let token = get_admin_authentication_token().await;
+    let request = get_request_with_auth(method, uri, &token);
+    let app = create_test_router().await;
+
+    app.oneshot(request.await).await.unwrap()
+}
+
+#[allow(dead_code)]
+pub async fn request_with_admin_auth_and_body<T: serde::Serialize>(
+    method: Method,
+    uri: &str,
+    payload: &T,
+) -> Response<Body> {
+    let json_payload = serde_json::to_string(payload).expect("Failed to serialize payload");
+    let token = get_admin_authentication_token().await;
     let request = get_request_with_auth_and_body(method, uri, &token, &json_payload);
     let app = create_test_router().await;
 

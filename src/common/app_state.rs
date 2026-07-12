@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
 use crate::domains::{
-    auth::AuthServiceTrait, device::DeviceServiceTrait, file::FileServiceTrait,
-    image::ImageServiceTrait, user::UserServiceTrait,
+    auth::AuthServiceTrait, device::DeviceServiceTrait, dictionary::DictionaryServiceTrait,
+    error_book::ErrorBookServiceTrait, file::FileServiceTrait, image::ImageServiceTrait,
+    record::RecordServiceTrait, review::ReviewServiceTrait, user::UserServiceTrait,
 };
 
 use super::config::Config;
@@ -19,29 +20,16 @@ pub struct AppState {
     pub user_service: Arc<dyn UserServiceTrait>,
     /// Service handling device-related logic.
     pub device_service: Arc<dyn DeviceServiceTrait>,
+    /// Service handling dictionaries and words.
+    pub dictionary_service: Arc<dyn DictionaryServiceTrait>,
     /// Service handling file-related logic.
     pub file_service: Arc<dyn FileServiceTrait>,
     /// Service handling image generation.
     pub image_service: Arc<dyn ImageServiceTrait>,
-}
-
-impl AppState {
-    /// Creates a new instance of AppState with the provided dependencies.
-    pub fn new(
-        config: Config,
-        auth_service: Arc<dyn AuthServiceTrait>,
-        user_service: Arc<dyn UserServiceTrait>,
-        device_service: Arc<dyn DeviceServiceTrait>,
-        file_service: Arc<dyn FileServiceTrait>,
-        image_service: Arc<dyn ImageServiceTrait>,
-    ) -> Self {
-        Self {
-            config,
-            auth_service,
-            user_service,
-            device_service,
-            file_service,
-            image_service,
-        }
-    }
+    /// Service handling exercise records.
+    pub record_service: Arc<dyn RecordServiceTrait>,
+    /// Service handling smart review sessions.
+    pub review_service: Arc<dyn ReviewServiceTrait>,
+    /// Service handling aggregated wrong-word records.
+    pub error_book_service: Arc<dyn ErrorBookServiceTrait>,
 }

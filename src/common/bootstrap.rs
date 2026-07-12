@@ -5,8 +5,12 @@ use sqlx::PgPool;
 use crate::common::config::Config;
 use crate::domains::auth::{AuthService, AuthServiceTrait};
 use crate::domains::device::{DeviceService, DeviceServiceTrait};
+use crate::domains::dictionary::{DictionaryService, DictionaryServiceTrait};
+use crate::domains::error_book::{ErrorBookService, ErrorBookServiceTrait};
 use crate::domains::file::{FileService, FileServiceTrait};
 use crate::domains::image::{ImageService, ImageServiceTrait};
+use crate::domains::record::{RecordService, RecordServiceTrait};
+use crate::domains::review::{ReviewService, ReviewServiceTrait};
 use crate::domains::user::UserServiceTrait;
 use crate::{common::app_state::AppState, domains::user::UserService};
 
@@ -19,16 +23,26 @@ pub fn build_app_state(pool: PgPool, config: Config) -> AppState {
         FileService::create_service(config.clone(), pool.clone());
     let user_service: Arc<dyn UserServiceTrait> = UserService::create_service(pool.clone());
     let device_service: Arc<dyn DeviceServiceTrait> = DeviceService::create_service(pool.clone());
+    let dictionary_service: Arc<dyn DictionaryServiceTrait> =
+        DictionaryService::create_service(pool.clone());
     let image_service: Arc<dyn ImageServiceTrait> = ImageService::create_service(config.clone());
+    let record_service: Arc<dyn RecordServiceTrait> = RecordService::create_service(pool.clone());
+    let review_service: Arc<dyn ReviewServiceTrait> = ReviewService::create_service(pool.clone());
+    let error_book_service: Arc<dyn ErrorBookServiceTrait> =
+        ErrorBookService::create_service(pool.clone());
 
-    AppState::new(
+    AppState {
         config,
         auth_service,
         user_service,
         device_service,
+        dictionary_service,
         file_service,
         image_service,
-    )
+        record_service,
+        review_service,
+        error_book_service,
+    }
 }
 
 /// Setup tracing for the application.

@@ -136,7 +136,7 @@ docker-compose down --rmi all
 1. Login to obtain a JWT token:
 
    ```bash
-   curl -X POST http://localhost:8080/auth/login \
+   curl -X POST http://localhost:8080/api/v1/auth/login \
      -H "Content-Type: application/json" \
      -d '{"email":"apitest01@example.com","password":"test_password"}'
    ```
@@ -151,7 +151,7 @@ docker-compose down --rmi all
 
 Open [http://localhost:8080/docs](http://localhost:8080/docs) in your browser for Swagger UI.
 
-- Authenticate via `/auth/login` (POST) with JSON payload:
+- Authenticate via `/api/v1/auth/login` (POST) with JSON payload:
 
   ```json
   {

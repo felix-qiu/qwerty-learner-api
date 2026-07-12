@@ -31,8 +31,12 @@ use crate::{
     domains::{
         auth::{user_auth_routes, UserAuthApiDoc},
         device::{device_routes, DeviceApiDoc},
+        dictionary::{dictionary_routes, DictionaryApiDoc},
+        error_book::{error_book_routes, ErrorBookApiDoc},
         file::{file_routes, FileApiDoc},
         image::{image_routes, ImageApiDoc},
+        record::{record_routes, RecordApiDoc},
+        review::{review_routes, ReviewApiDoc},
         user::{user_routes, UserApiDoc},
     },
 };
@@ -64,8 +68,24 @@ fn create_swagger_ui() -> SwaggerUi {
             UserApiDoc::openapi(),
         ),
         (
+            Url::new("Dictionaries", "/api-docs/dictionary/openapi.json"),
+            DictionaryApiDoc::openapi(),
+        ),
+        (
+            Url::new("Error Book", "/api-docs/error_book/openapi.json"),
+            ErrorBookApiDoc::openapi(),
+        ),
+        (
             Url::new("Devices", "/api-docs/device/openapi.json"),
             DeviceApiDoc::openapi(),
+        ),
+        (
+            Url::new("Records", "/api-docs/record/openapi.json"),
+            RecordApiDoc::openapi(),
+        ),
+        (
+            Url::new("Reviews", "/api-docs/review/openapi.json"),
+            ReviewApiDoc::openapi(),
         ),
         (
             Url::new("Files", "/api-docs/file/openapi.json"),
@@ -77,7 +97,13 @@ fn create_swagger_ui() -> SwaggerUi {
 pub fn create_router(state: AppState) -> Router {
     // Build a CORS layer that applies to everyone
     let cors = CorsLayer::new()
-        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::PATCH,
+            Method::DELETE,
+        ])
         .allow_origin(Any)
         .allow_headers([AUTHORIZATION, CONTENT_TYPE]);
 
@@ -91,6 +117,28 @@ pub fn create_router(state: AppState) -> Router {
     let auth_router = Router::new()
         .nest("/auth", user_auth_routes())
         .layer(middleware::from_fn(make_request_response_inspecter(false)));
+
+    let dictionary_router = Router::new()
+        .nest("/dictionaries", dictionary_routes())
+        .layer(middleware::from_fn(make_request_response_inspecter(true)));
+
+    let record_router = Router::new()
+        .nest("/records", record_routes())
+        .layer(middleware::from_fn(make_request_response_inspecter(true)));
+
+    let review_router = Router::new()
+        .nest("/reviews", review_routes())
+        .layer(middleware::from_fn(make_request_response_inspecter(true)));
+
+    let error_book_router =
+        error_book_routes().layer(middleware::from_fn(make_request_response_inspecter(true)));
+
+    let api_v1_router = Router::new()
+        .merge(auth_router)
+        .merge(dictionary_router)
+        .merge(record_router)
+        .merge(review_router)
+        .merge(error_book_router);
 
     // Protected API routes
     let protected_routes = Router::new()
@@ -128,7 +176,7 @@ pub fn create_router(state: AppState) -> Router {
     // and add the state
     Router::new()
         .route("/health", axum::routing::get(health_check))
-        .merge(auth_router)
+        .nest("/api/v1", api_v1_router)
         .merge(protected_routes)
         .merge(create_swagger_ui())
         .merge(public_assets_routes)

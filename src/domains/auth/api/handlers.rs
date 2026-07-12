@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Extension, State},
+    extract::{rejection::JsonRejection, Extension, State},
     http::StatusCode,
     response::IntoResponse,
     Json,
@@ -23,8 +23,9 @@ use crate::{
 )]
 pub async fn register(
     State(state): State<AppState>,
-    Json(payload): Json<RegisterRequest>,
+    payload: Result<Json<RegisterRequest>, JsonRejection>,
 ) -> Result<impl IntoResponse, AppError> {
+    let Json(payload) = payload.map_err(AppError::from)?;
     payload
         .validate()
         .map_err(|err| AppError::ValidationError(err.to_string()))?;
@@ -45,8 +46,9 @@ pub async fn register(
 )]
 pub async fn login(
     State(state): State<AppState>,
-    Json(payload): Json<LoginRequest>,
+    payload: Result<Json<LoginRequest>, JsonRejection>,
 ) -> Result<impl IntoResponse, AppError> {
+    let Json(payload) = payload.map_err(AppError::from)?;
     payload
         .validate()
         .map_err(|err| AppError::ValidationError(err.to_string()))?;
@@ -67,8 +69,9 @@ pub async fn login(
 )]
 pub async fn refresh(
     State(state): State<AppState>,
-    Json(payload): Json<RefreshTokenRequest>,
+    payload: Result<Json<RefreshTokenRequest>, JsonRejection>,
 ) -> Result<impl IntoResponse, AppError> {
+    let Json(payload) = payload.map_err(AppError::from)?;
     payload
         .validate()
         .map_err(|err| AppError::ValidationError(err.to_string()))?;
@@ -84,7 +87,7 @@ pub async fn refresh(
         (status = 200, description = "OK", body = crate::domains::auth::dto::auth_dto::AuthUserDto),
         (status = 401, description = "Unauthorized", body = crate::common::error::ErrorResponse)
     ),
-    security(("bearer_auth" = [])),
+    security(("bearerAuth" = [])),
     tag = "Auth"
 )]
 pub async fn me(
@@ -102,7 +105,7 @@ pub async fn me(
         (status = 204, description = "No Content"),
         (status = 401, description = "Unauthorized", body = crate::common::error::ErrorResponse)
     ),
-    security(("bearer_auth" = [])),
+    security(("bearerAuth" = [])),
     tag = "Auth"
 )]
 pub async fn logout(

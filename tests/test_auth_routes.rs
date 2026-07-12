@@ -22,7 +22,7 @@ async fn test_register_user() {
         display_name: Some("Register User".to_string()),
     };
 
-    let response = request_with_body(Method::POST, "/auth/register", &payload);
+    let response = request_with_body(Method::POST, "/api/v1/auth/register", &payload);
     let (parts, body) = response.await.into_parts();
 
     assert_eq!(parts.status, StatusCode::CREATED);
@@ -43,7 +43,7 @@ async fn test_register_duplicate_email() {
         display_name: Some("Duplicate User".to_string()),
     };
 
-    let response = request_with_body(Method::POST, "/auth/register", &payload);
+    let response = request_with_body(Method::POST, "/api/v1/auth/register", &payload);
     let (parts, body) = response.await.into_parts();
 
     assert_eq!(parts.status, StatusCode::CONFLICT);
@@ -59,7 +59,7 @@ async fn test_login_user() {
         password: TEST_AUTH_PASSWORD.to_string(),
     };
 
-    let response = request_with_body(Method::POST, "/auth/login", &payload);
+    let response = request_with_body(Method::POST, "/api/v1/auth/login", &payload);
     let (parts, body) = response.await.into_parts();
 
     assert_eq!(parts.status, StatusCode::OK);
@@ -78,7 +78,7 @@ async fn test_login_user_fail() {
         password: uuid::Uuid::new_v4().to_string(),
     };
 
-    let response = request_with_body(Method::POST, "/auth/login", &payload);
+    let response = request_with_body(Method::POST, "/api/v1/auth/login", &payload);
     let (parts, body) = response.await.into_parts();
 
     assert_eq!(parts.status, StatusCode::UNAUTHORIZED);
@@ -94,7 +94,7 @@ async fn test_refresh_token() {
         refresh_token: login.refresh_token.clone(),
     };
 
-    let response = request_with_body(Method::POST, "/auth/refresh", &payload);
+    let response = request_with_body(Method::POST, "/api/v1/auth/refresh", &payload);
     let (parts, body) = response.await.into_parts();
 
     assert_eq!(parts.status, StatusCode::OK);
@@ -109,7 +109,7 @@ async fn test_refresh_token() {
 async fn test_get_me() {
     let login = register_unique_user().await;
 
-    let response = request_with_bearer_token(Method::GET, "/auth/me", &login.access_token);
+    let response = request_with_bearer_token(Method::GET, "/api/v1/auth/me", &login.access_token);
     let (parts, body) = response.await.into_parts();
 
     assert_eq!(parts.status, StatusCode::OK);
@@ -123,14 +123,14 @@ async fn test_logout_revokes_refresh_tokens() {
     let login = register_unique_user().await;
 
     let logout_response =
-        request_with_bearer_token(Method::POST, "/auth/logout", &login.access_token);
+        request_with_bearer_token(Method::POST, "/api/v1/auth/logout", &login.access_token);
     let (logout_parts, _) = logout_response.await.into_parts();
     assert_eq!(logout_parts.status, StatusCode::NO_CONTENT);
 
     let payload = RefreshTokenRequest {
         refresh_token: login.refresh_token,
     };
-    let refresh_response = request_with_body(Method::POST, "/auth/refresh", &payload);
+    let refresh_response = request_with_body(Method::POST, "/api/v1/auth/refresh", &payload);
     let (refresh_parts, body) = refresh_response.await.into_parts();
 
     assert_eq!(refresh_parts.status, StatusCode::UNAUTHORIZED);
@@ -147,7 +147,7 @@ async fn register_unique_user() -> AuthResponse {
         display_name: Some("Auth Test User".to_string()),
     };
 
-    let response = request_with_body(Method::POST, "/auth/register", &payload);
+    let response = request_with_body(Method::POST, "/api/v1/auth/register", &payload);
     let (parts, body) = response.await.into_parts();
     assert_eq!(parts.status, StatusCode::CREATED);
 

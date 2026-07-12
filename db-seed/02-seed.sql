@@ -33,6 +33,47 @@ SELECT
   NOW()
 FROM seed_users;
 
+-- Admin API test account
+-- email: apitest-admin@example.com
+-- password: test_password
+INSERT INTO users (id, email, password_hash, display_name, role, status, created_at, updated_at)
+VALUES (
+  '00000000-0000-0000-0000-000000000022',
+  'apitest-admin@example.com',
+  '$argon2id$v=19$m=19456,t=2,p=1$XBFwBY52C9SpzkxON1OTLg$djDqZQvzxFKc9HOCWyZfKy+RlFTs0BJFSkcw/Tos14c',
+  'apitest-admin',
+  'admin',
+  'active',
+  NOW(),
+  NOW()
+);
+
+-- Seed dictionary data
+INSERT INTO dictionaries (
+  id, name, description, category, tags, language, language_category, default_pron_index
+) VALUES (
+  'apitest-dict',
+  'API Test Dictionary',
+  'Dictionary used by API integration tests',
+  '测试',
+  ARRAY['test', 'english'],
+  'en',
+  'en',
+  0
+);
+
+INSERT INTO words (dict_id, idx, name, trans, usphone, ukphone)
+SELECT
+  'apitest-dict',
+  index,
+  'word' || index,
+  ARRAY['translation ' || index],
+  'us' || index,
+  'uk' || index
+FROM generate_series(0, 24) AS index;
+
+SELECT sync_dictionary_length('apitest-dict');
+
 -- Seed data for devices
 INSERT INTO devices (id, user_id, name, status, device_os, registered_at, created_by, created_at, modified_by, modified_at) VALUES
 -- 4 devices per user

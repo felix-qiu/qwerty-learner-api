@@ -21,7 +21,7 @@ use utoipa::{
         (name = "Files", description = "File management endpoints")
     ),
     security(
-        ("bearer_auth" = [])
+        ("bearerAuth" = [])
     ),
     modifiers(&FileApiDoc)
 )]
@@ -32,7 +32,7 @@ impl utoipa::Modify for FileApiDoc {
     fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
         let components = openapi.components.as_mut().unwrap();
         components.add_security_scheme(
-            "bearer_auth",
+            "bearerAuth",
             SecurityScheme::Http(
                 HttpBuilder::new()
                     .scheme(HttpAuthScheme::Bearer)

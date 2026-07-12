@@ -1,5 +1,9 @@
 pub mod auth;
 pub mod device;
+pub mod dictionary;
+pub mod error_book;
 pub mod file;
 pub mod image;
+pub mod record;
+pub mod review;
 pub mod user;
