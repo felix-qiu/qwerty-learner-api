@@ -505,7 +505,7 @@ COMMENT ON VIEW v_user_summary IS '用户总览；对应 GET /stats/summary';
 CREATE OR REPLACE VIEW v_daily_word_activity AS
 SELECT
   wr.user_id,
-  to_char(to_timestamp(wr.time_stamp) AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day,
+  to_char(to_timestamp(wr.time_stamp) AT TIME ZONE 'Asia/Shanghai', 'YYYY-MM-DD') AS day,
   COUNT(*)::INTEGER AS exercise_time,
   COUNT(DISTINCT wr.word)::INTEGER AS unique_word_count,
   COUNT(*)::INTEGER AS word_count_raw,
@@ -518,7 +518,7 @@ LEFT JOIN LATERAL (
 ) x ON true
 GROUP BY wr.user_id, day;
 
-COMMENT ON VIEW v_daily_word_activity IS '按日练习聚合；对应 useWordStats 的中间层';
+COMMENT ON VIEW v_daily_word_activity IS '按 Asia/Shanghai 自然日聚合；对应 useWordStats 的中间层';
 
 -- =============================================================================
 -- 10. 辅助函数：分析指标 / 复习排序

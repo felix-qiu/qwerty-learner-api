@@ -612,6 +612,9 @@ DELETE /dictionaries/{dictId}
 
 对应 `useWordStats`：
 
+`from` / `to` 仍使用 Unix 秒且区间包含首尾；所有按日指标统一按
+`Asia/Shanghai` 自然日分组并补齐区间内无记录日期。
+
 ```json
 {
   "isEmpty": false,
@@ -675,15 +678,15 @@ DELETE /dictionaries/{dictId}
     "isOpen": true,
     "isOpenClickSound": true,
     "volume": 1,
-    "resource": { "key": "Default", "name": "Default", "filename": "..." }
+    "resource": null
   },
   "hintSoundsConfig": {
     "isOpen": true,
     "volume": 1,
     "isOpenWrongSound": true,
     "isOpenCorrectSound": true,
-    "wrongResource": { "key": "...", "name": "...", "filename": "..." },
-    "correctResource": { "key": "...", "name": "...", "filename": "..." }
+    "wrongResource": null,
+    "correctResource": null
   },
   "pronunciation": {
     "isOpen": true,
@@ -732,6 +735,10 @@ Body 为完整设置对象。
 ```
 
 深合并对象字段；布尔/标量直接覆盖。
+
+`resource`、`wrongResource`、`correctResource` 与 `dismissStartCardDate`
+允许显式传 `null`；其他已定义字段传 `null` 时返回 `422`。文档外字段按
+OpenAPI `additionalProperties` 语义保留，PATCH 时同样参与深合并。
 
 ---
 

@@ -319,7 +319,81 @@ COMMENT ON TABLE review_records IS '智能复习会话；对应 IReviewRecord / 
 COMMENT ON COLUMN review_records.words IS '按 errorCount*0.6 + latestErrorTime*0.4 排序后的 Word[]';
 
 -- ------------------------------------------------
--- 11) review aggregation and ranking
+-- 11) user settings
+-- ------------------------------------------------
+CREATE TABLE user_settings (
+    user_id     TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    settings    JSONB NOT NULL DEFAULT '{
+      "currentDict": "cet4",
+      "currentChapter": 0,
+      "loopWordConfig": { "times": 1 },
+      "keySoundsConfig": {
+        "isOpen": true,
+        "isOpenClickSound": true,
+        "volume": 1,
+        "resource": null
+      },
+      "hintSoundsConfig": {
+        "isOpen": true,
+        "volume": 1,
+        "isOpenWrongSound": true,
+        "isOpenCorrectSound": true,
+        "wrongResource": null,
+        "correctResource": null
+      },
+      "pronunciation": {
+        "isOpen": true,
+        "volume": 1,
+        "type": "us",
+        "name": "美音",
+        "isLoop": false,
+        "isTransRead": false,
+        "transVolume": 1,
+        "rate": 1
+      },
+      "fontsize": { "foreignFont": 48, "translateFont": 18 },
+      "randomConfig": { "isOpen": false },
+      "phoneticConfig": { "isOpen": true, "type": "us" },
+      "wordDictationConfig": {
+        "isOpen": false,
+        "type": "hideAll",
+        "openBy": "auto"
+      },
+      "isShowPrevAndNextWord": true,
+      "isIgnoreCase": true,
+      "isShowAnswerOnHover": true,
+      "isTextSelectable": false,
+      "isOpenDarkMode": false,
+      "dismissStartCardDate": null,
+      "hasSeenEnhancedPromotion": false
+    }'::JSONB,
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT chk_settings_is_object CHECK (jsonb_typeof(settings) = 'object')
+);
+
+CREATE TRIGGER trg_user_settings_updated_at
+    BEFORE UPDATE ON user_settings
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE INDEX idx_user_settings_gin ON user_settings USING GIN (settings);
+
+CREATE OR REPLACE FUNCTION create_default_user_settings()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO user_settings (user_id) VALUES (NEW.id)
+    ON CONFLICT (user_id) DO NOTHING;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_users_create_settings
+    AFTER INSERT ON users
+    FOR EACH ROW EXECUTE FUNCTION create_default_user_settings();
+
+COMMENT ON TABLE user_settings IS '用户偏好；替代 src/store/index.ts 中 localStorage atoms';
+
+-- ------------------------------------------------
+-- 12) review aggregation and ranking
 -- ------------------------------------------------
 CREATE OR REPLACE VIEW v_error_words AS
 SELECT
@@ -364,3 +438,83 @@ BEGIN
     ORDER BY score ASC;
 END;
 $$ LANGUAGE plpgsql STABLE;
+
+-- ------------------------------------------------
+-- 13) statistics views and helpers
+-- ------------------------------------------------
+CREATE OR REPLACE VIEW v_dict_stats AS
+SELECT
+    cr.user_id,
+    cr.dict,
+    COUNT(DISTINCT cr.chapter) FILTER (
+        WHERE cr.chapter IS NOT NULL AND cr.chapter >= 0
+    )::INTEGER AS exercised_chapter_count,
+    COUNT(*)::INTEGER AS chapter_record_count,
+    MAX(cr.time_stamp) AS last_practice_at
+FROM chapter_records cr
+GROUP BY cr.user_id, cr.dict;
+
+COMMENT ON VIEW v_dict_stats IS '词典进度；复习章节 -1 不计入已练章节';
+
+CREATE OR REPLACE VIEW v_chapter_stats AS
+SELECT
+    cr.user_id,
+    cr.dict,
+    cr.chapter,
+    COUNT(*)::INTEGER AS exercise_count,
+    ROUND(
+        AVG((cr.word_number - COALESCE(cardinality(cr.correct_word_indexes), 0))::NUMERIC),
+        2
+    )::DOUBLE PRECISION AS avg_wrong_word_count,
+    ROUND(AVG(cr.wrong_count::NUMERIC), 2)::DOUBLE PRECISION AS avg_wrong_input_count
+FROM chapter_records cr
+GROUP BY cr.user_id, cr.dict, cr.chapter;
+
+COMMENT ON VIEW v_chapter_stats IS '章节统计；对应 GET /stats/chapters';
+
+CREATE OR REPLACE VIEW v_user_summary AS
+SELECT
+    u.id AS user_id,
+    (SELECT COUNT(*) FROM word_records wr WHERE wr.user_id = u.id)::INTEGER
+        AS word_record_count,
+    (SELECT COUNT(*) FROM chapter_records cr WHERE cr.user_id = u.id)::INTEGER
+        AS chapter_record_count,
+    (SELECT COALESCE(SUM(cr.time_seconds), 0) FROM chapter_records cr WHERE cr.user_id = u.id)::INTEGER
+        AS total_time_seconds,
+    (SELECT MIN(wr.time_stamp) FROM word_records wr WHERE wr.user_id = u.id)
+        AS first_practice_at
+FROM users u;
+
+COMMENT ON VIEW v_user_summary IS '用户练习总览；对应 GET /stats/summary';
+
+CREATE OR REPLACE VIEW v_daily_word_activity AS
+SELECT
+    wr.user_id,
+    to_char(
+        to_timestamp(wr.time_stamp) AT TIME ZONE 'Asia/Shanghai',
+        'YYYY-MM-DD'
+    ) AS day,
+    COUNT(*)::INTEGER AS exercise_time,
+    COUNT(DISTINCT wr.word)::INTEGER AS unique_word_count,
+    COUNT(*)::INTEGER AS word_count_raw,
+    COALESCE(SUM(timing.total), 0)::DOUBLE PRECISION AS total_timing_ms,
+    COALESCE(SUM(wr.wrong_count), 0)::INTEGER AS wrong_count
+FROM word_records wr
+LEFT JOIN LATERAL (
+    SELECT SUM(value)::DOUBLE PRECISION AS total
+    FROM unnest(wr.timing) AS value
+) timing ON true
+GROUP BY wr.user_id, day;
+
+COMMENT ON VIEW v_daily_word_activity IS '按 Asia/Shanghai 自然日聚合；对应 GET /stats/analysis';
+
+CREATE OR REPLACE FUNCTION activity_level(p_count INTEGER)
+RETURNS INTEGER AS $$
+BEGIN
+    IF p_count IS NULL OR p_count <= 0 THEN RETURN 0; END IF;
+    IF p_count < 4 THEN RETURN 1; END IF;
+    IF p_count < 8 THEN RETURN 2; END IF;
+    IF p_count < 12 THEN RETURN 3; END IF;
+    RETURN 4;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;

@@ -6,4 +6,6 @@ pub mod file;
 pub mod image;
 pub mod record;
 pub mod review;
+pub mod settings;
+pub mod stats;
 pub mod user;

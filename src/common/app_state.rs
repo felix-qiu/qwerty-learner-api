@@ -3,7 +3,8 @@ use std::sync::Arc;
 use crate::domains::{
     auth::AuthServiceTrait, device::DeviceServiceTrait, dictionary::DictionaryServiceTrait,
     error_book::ErrorBookServiceTrait, file::FileServiceTrait, image::ImageServiceTrait,
-    record::RecordServiceTrait, review::ReviewServiceTrait, user::UserServiceTrait,
+    record::RecordServiceTrait, review::ReviewServiceTrait, settings::SettingsServiceTrait,
+    stats::StatsServiceTrait, user::UserServiceTrait,
 };
 
 use super::config::Config;
@@ -32,4 +33,8 @@ pub struct AppState {
     pub review_service: Arc<dyn ReviewServiceTrait>,
     /// Service handling aggregated wrong-word records.
     pub error_book_service: Arc<dyn ErrorBookServiceTrait>,
+    /// Service handling practice statistics and analysis.
+    pub stats_service: Arc<dyn StatsServiceTrait>,
+    /// Service handling per-user application settings.
+    pub settings_service: Arc<dyn SettingsServiceTrait>,
 }

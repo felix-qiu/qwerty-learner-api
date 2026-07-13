@@ -1464,10 +1464,28 @@ components:
             volume:
               type: number
             resource:
-              $ref: '#/components/schemas/SoundResource'
+              nullable: true
+              allOf:
+                - $ref: '#/components/schemas/SoundResource'
         hintSoundsConfig:
           type: object
-          additionalProperties: true
+          properties:
+            isOpen:
+              type: boolean
+            volume:
+              type: number
+            isOpenWrongSound:
+              type: boolean
+            isOpenCorrectSound:
+              type: boolean
+            wrongResource:
+              nullable: true
+              allOf:
+                - $ref: '#/components/schemas/SoundResource'
+            correctResource:
+              nullable: true
+              allOf:
+                - $ref: '#/components/schemas/SoundResource'
         pronunciation:
           type: object
           properties:

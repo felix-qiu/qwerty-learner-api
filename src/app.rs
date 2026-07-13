@@ -37,6 +37,8 @@ use crate::{
         image::{image_routes, ImageApiDoc},
         record::{record_routes, RecordApiDoc},
         review::{review_routes, ReviewApiDoc},
+        settings::{settings_routes, SettingsApiDoc},
+        stats::{stats_routes, StatsApiDoc},
         user::{user_routes, UserApiDoc},
     },
 };
@@ -88,6 +90,14 @@ fn create_swagger_ui() -> SwaggerUi {
             ReviewApiDoc::openapi(),
         ),
         (
+            Url::new("Stats", "/api-docs/stats/openapi.json"),
+            StatsApiDoc::openapi(),
+        ),
+        (
+            Url::new("Settings", "/api-docs/settings/openapi.json"),
+            SettingsApiDoc::openapi(),
+        ),
+        (
             Url::new("Files", "/api-docs/file/openapi.json"),
             FileApiDoc::openapi(),
         ),
@@ -133,12 +143,20 @@ pub fn create_router(state: AppState) -> Router {
     let error_book_router =
         error_book_routes().layer(middleware::from_fn(make_request_response_inspecter(true)));
 
+    let stats_router =
+        stats_routes().layer(middleware::from_fn(make_request_response_inspecter(true)));
+
+    let settings_router =
+        settings_routes().layer(middleware::from_fn(make_request_response_inspecter(true)));
+
     let api_v1_router = Router::new()
         .merge(auth_router)
         .merge(dictionary_router)
         .merge(record_router)
         .merge(review_router)
-        .merge(error_book_router);
+        .merge(error_book_router)
+        .merge(stats_router)
+        .merge(settings_router);
 
     // Protected API routes
     let protected_routes = Router::new()

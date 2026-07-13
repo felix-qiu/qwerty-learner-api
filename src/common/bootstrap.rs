@@ -11,6 +11,8 @@ use crate::domains::file::{FileService, FileServiceTrait};
 use crate::domains::image::{ImageService, ImageServiceTrait};
 use crate::domains::record::{RecordService, RecordServiceTrait};
 use crate::domains::review::{ReviewService, ReviewServiceTrait};
+use crate::domains::settings::{SettingsService, SettingsServiceTrait};
+use crate::domains::stats::{StatsService, StatsServiceTrait};
 use crate::domains::user::UserServiceTrait;
 use crate::{common::app_state::AppState, domains::user::UserService};
 
@@ -30,6 +32,8 @@ pub fn build_app_state(pool: PgPool, config: Config) -> AppState {
     let review_service: Arc<dyn ReviewServiceTrait> = ReviewService::create_service(pool.clone());
     let error_book_service: Arc<dyn ErrorBookServiceTrait> =
         ErrorBookService::create_service(pool.clone());
+    let stats_service: Arc<dyn StatsServiceTrait> = StatsService::create_service(pool.clone());
+    let settings_service: Arc<dyn SettingsServiceTrait> = SettingsService::create_service(pool);
 
     AppState {
         config,
@@ -42,6 +46,8 @@ pub fn build_app_state(pool: PgPool, config: Config) -> AppState {
         record_service,
         review_service,
         error_book_service,
+        stats_service,
+        settings_service,
     }
 }
 
